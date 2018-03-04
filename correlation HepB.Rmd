@@ -1,0 +1,132 @@
+Validation of Hepatitis B viral count at ICL
+========================================================
+
+These are the results of the validation of the Hepatitis B viral count at Internatinal Clinical Laboratories, Addis Abeba. 
+Serum specimens were run on the Abbott m2000 system and results were compared with results of the same specimens obtained from Bioscientia (Germany).
+
+```{r,echo=FALSE, results='hide'}
+setwd("~/Documents/workspace/R-project/HBV")
+
+# libraries
+library(ggplot2)
+library(corrgram)
+library(MethComp)
+
+# read file
+HepB_ICL <- read.delim("~/Documents/workspace/R-project/HBV/HepB_ICL.txt")
+```
+In a summary. 'Zero' values have been changed to '1' in order to be able to plot in logaritmic scale. The lower limit of detection (LLD) at ICL is 10 IU/ml and the LLD at Bioscientie os 20IU/ml. So, if the result is <20IU/ml, the detected value could be anywhere between 1 and 20. Therefore, the lower limit of detection has been set for ICL at '5 IU/ml' and '10 IU/ml' for Bioscientia. 
+
+```{r Summary}
+summary(HepB_ICL)
+head(HepB_ICL)
+```
+To make it more easy, the set of values from Bioscientia = 'x'. The set of values from ICL = 'y' 
+```{r,echo=FALSE}
+x <- HepB_ICL$Bioscientia
+y <- HepB_ICL$ICL
+```
+Calculate the means and difference between the two sets (x and y)
+```{r Mean}
+# derive difference
+mean(x)
+mean(y)
+# mean Bio - mean ICL
+mean(x)-mean(y)
+```
+Because n=17 is small, the distribution of the differences should be approximately normal. Check using a boxplot and QQ plot. There is some skew.
+```{r Boxplot}
+HepB_ICL$diff <- x-y
+# HepB_ICL$diff
+
+boxplot(HepB_ICL$diff)
+qqnorm(HepB_ICL$diff)
+qqline(HepB_ICL$diff)
+```
+Shaphiro test of normality. 
+```{r Shapiro}
+shapiro.test(HepB_ICL$diff)
+```
+The normality test gives p < 0.003, which is small, so we reject the null hypothesis that the values are distributed normally.
+
+This means that we cannot use the student t-test. Instead, use the Mann-Whitney-Wilcoxon Test, we can decide whether the population distributions are identical without assuming them to follow the normal distribution.
+```{r Wilcoxon}
+wilcox.test(x, y, paired = TRUE)
+```
+p > 0.05 and therefore the H0 is NOT rejected. The two populations are identical.
+
+Just to see what happens in the Student T-test.
+A paired t-test: one sample, two tests
+H0 = no difference; H1 = mean of 2 tests are different
+mu= a number indicating the true value of the mean 
+(or difference in means if you are performing a two sample test).
+```{r t-test}
+t.test(x, y, mu=0, paired=T, alternative="greater")
+```
+p = 0.756. Because p is larger than alpha, we do NOT reject H0.
+In other words, it is unlikely the observed agreements happened by chance. 
+However, because the populations do not have a normal distribution, we can not use the outcome if this test.
+
+For correlation, three methods are used: pearson, kendall and spearman at a confidence level of 95%.
+```{r Correlation}
+# correlation of the two methods
+cor.test(x, y, 
+         alternative = c("two.sided", "less", "greater"),
+         method = c("pearson", "kendall", "spearman"),
+         exact = NULL, conf.level = 0.95)
+```
+The correlation with the spearman test is 0.9398081. Almost perfect correlation. 
+```{r,echo=FALSE,results="hide"}
+# drop first column
+HepB_ICL$PIN <- NULL
+```
+Plotting the two methods using logarithmic scales.
+```{r Plotting}
+g <- ggplot(HepB_ICL, aes(log(ICL), log(Bioscientia)))
+
+
+# add layers
+g + 
+  geom_smooth(method="lm", se=TRUE, col="steelblue", size = 1) +
+  geom_point(size = 3, aes(colour = x)) +
+  scale_colour_gradient("IU/ml", high = "red", low = "blue", space = "Lab") +
+  labs(y = "BioScientia (log IU/ml)") +
+  labs(x = "ICL (log IU/ml)") +
+  theme_bw(base_family = "Helvetica", base_size = 14) +
+  scale_x_continuous(breaks=c(0,4,8,12))
+```
+Summary data on the correlation line.
+```{r}
+regmod <- lm(y~x, data=HepB_ICL)
+summary(regmod)
+```
+
+The Bland-Altman Analysis. To check if there is a bias.
+```{r, echo=FALSE}
+# convert table to datafram
+as.data.frame.matrix(HepB_ICL) 
+```
+```{r}
+BlandAltman(x, y,
+            x.name = "BioScientia IU/ml",
+            y.name = "ICL IU/ml",
+            maintit = "Bland-Altman plot for HBV count",
+            cex = 1,
+            pch = 16,
+            col.points = "black",
+            col.lines = "blue",
+            limx = NULL,
+            limy = NULL,
+            ymax = NULL,
+            eqax = FALSE,
+            xlab = NULL,
+            ylab = NULL,
+            print = TRUE,
+            reg.line = FALSE,
+            digits = 2,
+            mult = FALSE)
+```
+When the dots are around 0, the two test could be interchanged for a patient. The two test can be interchanged. 
+
+
+
